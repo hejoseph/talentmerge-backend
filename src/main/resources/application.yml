@@ -1,0 +1,38 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:talentmerge
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      
+  web:
+    cors:
+      allowed-origins: "http://localhost:3000"
+      allowed-methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+      allowed-headers: ["*"]
+      allow-credentials: true
+
+jwt:
+  secret: mySecretKey123456789012345678901234567890
+  expiration: 86400000 # 24 hours
+
+logging:
+  level:
+    com.talentmerge: DEBUG
+    org.springframework.security: DEBUG
