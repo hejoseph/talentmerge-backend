@@ -29,7 +29,7 @@ spring:
       allow-credentials: true
 
 jwt:
-  secret: mySecretKey123456789012345678901234567890
+  secret: myVeryLongAndSecureSecretKeyForJWTTokenGeneration1234567890123456789012345678901234567890
   expiration: 86400000 # 24 hours
 
 logging:

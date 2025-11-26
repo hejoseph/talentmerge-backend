@@ -22,15 +22,21 @@ public class AuthController {
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest,
                                             HttpServletRequest request) {
         try {
+            System.out.println("Login attempt for username: " + loginRequest.getUsername());
             LoginResponse loginResponse = authService.authenticateUser(loginRequest);
+            System.out.println("Login successful for username: " + loginRequest.getUsername());
             return ResponseEntity.ok(loginResponse);
         } catch (BadCredentialsException e) {
+            System.out.println("Bad credentials for username: " + loginRequest.getUsername());
+            e.printStackTrace();
             ErrorResponse errorResponse = new ErrorResponse(401, "Unauthorized", 
                     "Invalid username or password", request.getRequestURI());
             return ResponseEntity.status(401).body(errorResponse);
         } catch (Exception e) {
+            System.out.println("Unexpected error during login for username: " + loginRequest.getUsername());
+            e.printStackTrace();
             ErrorResponse errorResponse = new ErrorResponse(500, "Internal Server Error", 
-                    "An unexpected error occurred", request.getRequestURI());
+                    "An unexpected error occurred: " + e.getMessage(), request.getRequestURI());
             return ResponseEntity.status(500).body(errorResponse);
         }
     }
