@@ -31,3 +31,7 @@ logging:
   level:
     com.talentmerge: DEBUG
     org.springframework.security: DEBUG
+
+app:
+  file:
+    upload-dir: uploads
