@@ -70,7 +70,7 @@ public class WebSecurityConfig {
                         .requestMatchers(new AntPathRequestMatcher("/test/**")).permitAll()
                         .anyRequest().authenticated()
                 )
-                .headers(headers -> headers.frameOptions().sameOrigin())
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(authenticationJwtTokenFilter(), UsernamePasswordAuthenticationFilter.class);
         
