@@ -9,6 +9,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/resumes")
@@ -24,17 +26,18 @@ public class ResumeController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<String> uploadResume(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<Map<String, String>> uploadResume(@RequestParam("file") MultipartFile file) {
+        System.out.println("UPLOAD CONTROLLER REACHED, FILE = " + file.getOriginalFilename());
         if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body("Please select a file to upload.");
+            return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Please select a file to upload."));
         }
         try {
             String fileName = fileStorageService.storeFile(file);
             Path filePath = fileStorageService.getFile(fileName);
             String content = parsingService.parse(filePath);
-            return ResponseEntity.ok(content);
+            return ResponseEntity.ok(Collections.singletonMap("text", content));
         } catch (IOException ex) {
-            return ResponseEntity.status(500).body("Could not process the file: " + ex.getMessage());
+            return ResponseEntity.status(500).body(Collections.singletonMap("error", "Could not process the file: " + ex.getMessage()));
         }
     }
 }
