@@ -1,15 +1,18 @@
 package com.talentmerge.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.Lob;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "candidates")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Candidate {
 
     @Id
@@ -26,52 +29,20 @@ public class Candidate {
 
     private String originalFilePath;
 
-    // Getters and Setters
-    public Long getId() {
-        return id;
+    @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<WorkExperience> workExperiences = new ArrayList<>();
+
+    @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Education> educations = new ArrayList<>();
+
+    // Helper methods to sync both sides of the relationship
+    public void addWorkExperience(WorkExperience workExperience) {
+        workExperiences.add(workExperience);
+        workExperience.setCandidate(this);
     }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getSkills() {
-        return skills;
-    }
-
-    public void setSkills(String skills) {
-        this.skills = skills;
-    }
-
-    public String getOriginalFilePath() {
-        return originalFilePath;
-    }
-
-    public void setOriginalFilePath(String originalFilePath) {
-        this.originalFilePath = originalFilePath;
+    public void addEducation(Education education) {
+        educations.add(education);
+        education.setCandidate(this);
     }
 }
