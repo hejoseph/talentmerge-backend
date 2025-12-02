@@ -1,6 +1,8 @@
 package com.talentmerge.controller;
 
 import com.talentmerge.dto.CandidateResponseDTO;
+import com.talentmerge.dto.EducationDTO;
+import com.talentmerge.dto.WorkExperienceDTO;
 import com.talentmerge.model.Candidate;
 import com.talentmerge.repository.CandidateRepository;
 import com.talentmerge.service.FileStorageService;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/resumes")
@@ -56,13 +60,23 @@ public class ResumeController {
             Candidate savedCandidate = candidateRepository.save(candidate);
 
             // 5. Return the structured data as a DTO
+            List<WorkExperienceDTO> workExperienceDTOs = savedCandidate.getWorkExperiences().stream()
+                    .map(exp -> new WorkExperienceDTO(exp.getId(), exp.getJobTitle(), exp.getCompany(), exp.getStartDate(), exp.getEndDate(), exp.getDescription()))
+                    .collect(Collectors.toList());
+
+            List<EducationDTO> educationDTOs = savedCandidate.getEducations().stream()
+                    .map(edu -> new EducationDTO(edu.getId(), edu.getInstitution(), edu.getDegree(), edu.getGraduationDate()))
+                    .collect(Collectors.toList());
+
             CandidateResponseDTO responseDTO = new CandidateResponseDTO(
                     savedCandidate.getId(),
                     savedCandidate.getName(),
                     savedCandidate.getEmail(),
                     savedCandidate.getPhone(),
                     savedCandidate.getSkills(),
-                    savedCandidate.getOriginalFilePath()
+                    savedCandidate.getOriginalFilePath(),
+                    workExperienceDTOs,
+                    educationDTOs
             );
 
             return ResponseEntity.ok(responseDTO);
