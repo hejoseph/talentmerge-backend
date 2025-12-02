@@ -1,8 +1,9 @@
 package com.talentmerge.service;
 
-import java.io.IOException;
-import java.nio.file.Path;
+import com.talentmerge.model.Candidate;
+import java.io.InputStream;
 
 public interface ParsingService {
-    String parse(Path filePath) throws IOException;
+    String parseResume(InputStream inputStream, String contentType);
+    Candidate parseCandidateFromText(String text);
 }
