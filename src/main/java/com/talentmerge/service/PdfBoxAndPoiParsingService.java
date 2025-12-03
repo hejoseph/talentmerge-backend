@@ -279,10 +279,22 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
     private String extractPhone(String text) {
-        Pattern pattern = Pattern.compile("(\\+?\\d{1,3}[-\\.\\s]?)?\\(?\\d{3}\\)?[-\\.\\s]?\\d{3}[-\\.\\s]?\\d{4}");
+        // This regex is intentionally broad to find phone number candidates.
+        // It looks for sequences of 9 to 25 characters that consist of digits, whitespace, and typical phone number punctuation.
+        Pattern pattern = Pattern.compile("\\+?[\\d\\s-().]{9,25}");
         Matcher matcher = pattern.matcher(text);
-        if (matcher.find()) {
-            return matcher.group(0).trim();
+        while (matcher.find()) {
+            String candidate = matcher.group(0);
+
+            // Count the digits in the candidate string.
+            long digitCount = candidate.chars().filter(Character::isDigit).count();
+
+            // As per the user's request, if it contains 9 or more digits, we consider it a phone number.
+            if (digitCount >= 9) {
+                // Clean up the candidate string by removing trailing punctuation.
+                String cleanedCandidate = candidate.trim().replaceAll("[.,;:]*$", "");
+                return cleanedCandidate;
+            }
         }
         return "N/A";
     }
