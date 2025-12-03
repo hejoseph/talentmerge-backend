@@ -94,4 +94,31 @@ class PdfBoxAndPoiParsingServiceTest {
         Candidate candidate = parsingService.parseCandidateFromText(text);
         assertEquals("N/A", candidate.getPhone());
     }
+
+    @Test
+    @DisplayName("Should parse MM/YYYY date format in work experience")
+    void testParseCandidateFromText_workExperienceWithMmYyyyDate() {
+        String text = "Expérience professionnelle\n" +
+                      "Software Engineer\n" +
+                      "Tech Company\n" +
+                      "01/2020 - 12/2022\n" +
+                      "Developed cool stuff.";
+        Candidate candidate = parsingService.parseCandidateFromText(text);
+        assertEquals(1, candidate.getWorkExperiences().size());
+        assertEquals("2020-01-01", candidate.getWorkExperiences().get(0).getStartDate().toString());
+        assertEquals("2022-12-01", candidate.getWorkExperiences().get(0).getEndDate().toString());
+    }
+
+    @Test
+    @DisplayName("Should parse MM/YYYY date format in education")
+    void testParseCandidateFromText_educationWithMmYyyyDate() {
+        String text = "Formation\n" +
+                      "Master's Degree\n" +
+                      "University of Technology\n" +
+                      "09/2019\n" +
+                      "Graduated with honors.";
+        Candidate candidate = parsingService.parseCandidateFromText(text);
+        assertEquals(1, candidate.getEducations().size());
+        assertEquals("2019-09-01", candidate.getEducations().get(0).getGraduationDate().toString());
+    }
 }

@@ -14,10 +14,12 @@ import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.DateTimeFormatterBuilder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,10 +28,16 @@ import java.util.regex.Pattern;
 public class PdfBoxAndPoiParsingService implements ParsingService {
 
     private static final List<String> SECTION_KEYWORDS = Arrays.asList(
+            // English
             "experience", "employment history", "work experience",
             "education", "academic background",
             "skills", "technical skills", "competencies",
-            "summary", "profile", "objective"
+            "summary", "profile", "objective",
+            // French
+            "expérience professionnelle", "expériences",
+            "formation", "éducation",
+            "compétences",
+            "profil", "à propos"
     );
 
     private static final List<String> SKILL_DICTIONARY = Arrays.asList(
@@ -42,13 +50,22 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
             // Add more skills as needed
     );
 
-    // Date patterns for parsing dates in resumes
+    // Date patterns for parsing dates in resumes, now including French months
     private static final List<Pattern> DATE_PATTERNS = Arrays.asList(
-            Pattern.compile("\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{4}\\b", Pattern.CASE_INSENSITIVE), // Month YYYY
+            Pattern.compile("\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z.]*\\s+\\d{4}\\b", Pattern.CASE_INSENSITIVE), // Month YYYY
             Pattern.compile("\\b\\d{2}/\\d{4}\\b"), // MM/YYYY
             Pattern.compile("\\b\\d{4}\\b") // YYYY
     );
-    private static final DateTimeFormatter MONTH_YEAR_FORMATTER = DateTimeFormatter.ofPattern("MMM yyyy");
+
+    // Locale-specific formatters
+    private static final DateTimeFormatter MONTH_YEAR_FORMATTER_EN = new DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendPattern("MMM yyyy")
+            .toFormatter(Locale.ENGLISH);
+    private static final DateTimeFormatter MONTH_YEAR_FORMATTER_FR = new DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendPattern("MMM yyyy")
+            .toFormatter(Locale.FRENCH);
     private static final DateTimeFormatter MM_YYYY_FORMATTER = DateTimeFormatter.ofPattern("MM/yyyy");
     private static final DateTimeFormatter YYYY_FORMATTER = DateTimeFormatter.ofPattern("yyyy");
 
@@ -66,12 +83,9 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
                 case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
                     return parseDocx(inputStream);
                 default:
-                    // Optionally, handle unsupported file types or return a specific message
                     return "Unsupported file type: " + contentType;
             }
         } catch (IOException e) {
-            // Log the exception and return an error message
-            // For a real application, you'd use a logging framework
             e.printStackTrace();
             return "Error parsing resume: " + e.getMessage();
         }
@@ -126,7 +140,6 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
             String lowercasedLine = line.trim().toLowerCase();
             String matchedKeyword = null;
 
-            // Check if the line is a section header
             for (String keyword : SECTION_KEYWORDS) {
                 if (lowercasedLine.startsWith(keyword)) {
                     matchedKeyword = keyword;
@@ -135,43 +148,38 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
             }
 
             if (matchedKeyword != null) {
-                // Save the previous section's content
                 if (!content.toString().trim().isEmpty()) {
                     sections.put(normalizeSectionKey(currentSection), content.toString().trim());
                 }
-                // Start a new section
                 currentSection = matchedKeyword;
                 content = new StringBuilder();
-                // Add the header line to the new section's content
                 content.append(line).append(System.lineSeparator());
             } else {
-                // Append line to the current section's content
                 content.append(line).append(System.lineSeparator());
             }
         }
-        // Add the last section
         sections.put(normalizeSectionKey(currentSection), content.toString().trim());
 
         return sections;
     }
 
     private String normalizeSectionKey(String keyword) {
-        if (keyword.contains("experience") || keyword.contains("employment")) return "experience";
-        if (keyword.contains("education") || keyword.contains("academic")) return "education";
-        if (keyword.contains("skill") || keyword.contains("competencies")) return "skills";
-        return "summary";
+        if (keyword.contains("experience") || keyword.contains("expériences") || keyword.contains("employment")) return "experience";
+        if (keyword.contains("education") || keyword.contains("formation") || keyword.contains("academic")) return "education";
+        if (keyword.contains("skill") || keyword.contains("compétences") || keyword.contains("competencies")) return "skills";
+        if (keyword.contains("summary") || keyword.contains("profil") || keyword.contains("à propos") || keyword.contains("objective")) return "summary";
+        return "summary"; // Default
     }
 
-    // Placeholder implementations for the next steps
     private List<WorkExperience> parseWorkExperience(String text) {
-        // Logic to be implemented in Step 6
         List<WorkExperience> experiences = new ArrayList<>();
+        // This regex is adapted for both English and French formats.
         Pattern jobPattern = Pattern.compile(
-                "(?<jobTitle>[A-Za-z\\s,./-]+)\\n"
-                        + "(?<company>[A-Za-z0-9\\s,.-]+)(?:\\s*|\\s*(?<location>[A-Za-z\\s,.]+))?\\n"
-                        + "(?<startDate>\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})\\s*[-– ]\\s*(?<endDate>Present|\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})\\n"
-                        + "(?<description>(?:(?! [A-Za-z\\s,./-]+\\n[A-Za-z0-9\\s,.-]+).)*?)",
-                Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+                "(?<jobTitle>.+?)\\n"
+                        + "(?<company>.+?)\\n"
+                        + "(?<startDate>\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z.]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})\\s*[-– ]\\s*(?<endDate>Present|Aujourd'hui|\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z.]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})"
+                        + "(?:\\n(?<description>(?:(?!^.+?\\n.+?\\n(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)).|\\n)*))?",
+                Pattern.CASE_INSENSITIVE
         );
 
         Matcher matcher = jobPattern.matcher(text);
@@ -181,41 +189,31 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
             exp.setCompany(matcher.group("company").trim());
             exp.setStartDate(parseDate(matcher.group("startDate")));
             exp.setEndDate(parseDate(matcher.group("endDate")));
-            exp.setDescription(matcher.group("description").trim());
+            String description = matcher.group("description") != null ? matcher.group("description").trim() : "";
+            exp.setDescription(description);
             experiences.add(exp);
         }
         return experiences;
     }
 
     private List<Education> parseEducation(String text) {
-        // Logic to be implemented in Step 7
         List<Education> educations = new ArrayList<>();
+        // This regex is adapted for both English and French formats.
         Pattern eduPattern = Pattern.compile(
-                "(?<degree>[A-Za-z\\s.-]+)(?:,\\s*(?<major>[A-Za-z\\s.-]+))?\\n"
-                        + "(?<institution>[A-Za-z0-9\\s,.-]+)(?:\\s*|\\s*(?<location>[A-Za-z\\s,.]+))?\\n"
-                        + "(Graduated:\\s*)?(?<gradDate>\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})",
-                Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+                "(?<degree>.+?)\\n"
+                        + "(?<institution>.+?)\\n"
+                        + "(?:Graduated: |Obtenu en )?(?<gradDate>\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z.]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})"
+                        + "(?:\\n(?<details>(?:(?!^.+?\\n.+?\\n(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)).|\\n)*))?",
+                Pattern.CASE_INSENSITIVE
         );
 
         Matcher matcher = eduPattern.matcher(text);
         while (matcher.find()) {
             Education edu = new Education();
-            // Prioritize degree and then fall back to the whole matched group if degree is null
-            String degreeText = matcher.group("degree");
-            String majorText = matcher.group("major");
-
-            if (degreeText != null && !degreeText.trim().isEmpty()) {
-                if (majorText != null && !majorText.trim().isEmpty()) {
-                    edu.setDegree(degreeText.trim() + ", " + majorText.trim());
-                } else {
-                    edu.setDegree(degreeText.trim());
-                }
-            } else {
-                edu.setDegree("N/A"); // Fallback if no specific degree or major found
-            }
-
+            edu.setDegree(matcher.group("degree").trim());
             edu.setInstitution(matcher.group("institution").trim());
             edu.setGraduationDate(parseDate(matcher.group("gradDate")));
+            // Optionally, you could add the `details` to the education object if the model is updated.
             educations.add(edu);
         }
         return educations;
@@ -227,28 +225,48 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
             Pattern pattern = Pattern.compile("\\b" + Pattern.quote(skill) + "\\b", Pattern.CASE_INSENSITIVE);
             Matcher matcher = pattern.matcher(text);
             if (matcher.find()) {
-                foundSkills.add(skill);
+                if (!foundSkills.contains(skill)) {
+                    foundSkills.add(skill);
+                }
             }
         }
         return String.join(", ", foundSkills);
     }
 
     private LocalDate parseDate(String dateString) {
-        if (dateString == null || dateString.equalsIgnoreCase("Present")) {
+        if (dateString == null || dateString.equalsIgnoreCase("Present") || dateString.equalsIgnoreCase("Aujourd'hui")) {
             return null;
         }
-        dateString = dateString.replace(".", ""); // Remove dots from abbreviations like "Jan." -> "Jan"
+        dateString = dateString.replace(".", ""); // remove dots from janv. -> janv
+
+        // Try parsing MM/YYYY directly first
+        try {
+            if (dateString.matches("\\d{2}/\\d{4}")) {
+                return LocalDate.parse("01/" + dateString.trim(), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+            }
+        } catch (DateTimeParseException e) {
+            // Fallback to other patterns if this specific parse fails
+        }
 
         for (Pattern pattern : DATE_PATTERNS) {
-            Matcher matcher = pattern.matcher(dateString);
+            Matcher matcher = pattern.matcher(dateString.trim());
             if (matcher.matches()) {
                 try {
-                    if (dateString.matches("(?i)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{4}")) {
-                        return LocalDate.parse(dateString, MONTH_YEAR_FORMATTER);
-                    } else if (dateString.matches("\\d{2}/\\d{4}")) {
-                        return LocalDate.parse("01/" + dateString, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                    } else if (dateString.matches("\\d{4}")) {
-                        return LocalDate.parse(dateString + "-01-01"); // Assume start of year
+                    String matchedStr = matcher.group(0);
+                    if (matchedStr.matches("(?i).*[a-zA-Z].*")) { // Contains letters, so it's a Month YYYY format
+                        // Try English first
+                        try {
+                            return LocalDate.parse("01 " + matchedStr, new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("dd MMM yyyy").toFormatter(Locale.ENGLISH)).withDayOfMonth(1);
+                        } catch (DateTimeParseException e) {
+                            // Then try French
+                            try {
+                                return LocalDate.parse("01 " + matchedStr, new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("dd MMM yyyy").toFormatter(Locale.FRENCH)).withDayOfMonth(1);
+                            } catch (DateTimeParseException e2) {
+                                // Log failure if needed
+                            }
+                        }
+                    } else if (matchedStr.matches("\\d{4}")) {
+                        return LocalDate.parse(matchedStr + "-01-01");
                     }
                 } catch (DateTimeParseException e) {
                     // Continue to next pattern
@@ -259,9 +277,7 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
     private String extractName(String text) {
-        // This is a simple heuristic and might need to be improved.
-        // It assumes the name is one of the first lines of the resume.
-        Pattern pattern = Pattern.compile("^([A-Z][a-z]+(?:\\s[A-Z][a-z]+)+)", Pattern.MULTILINE);
+        Pattern pattern = Pattern.compile("^([A-ZÀ-ÿ][a-zà-ÿ]+(?:\\s[A-ZÀ-ÿ][a-zà-ÿ']+)+)", Pattern.MULTILINE);
         Matcher matcher = pattern.matcher(text);
         if (matcher.find()) {
             return matcher.group(1).trim();
@@ -279,19 +295,12 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
     private String extractPhone(String text) {
-        // This regex is intentionally broad to find phone number candidates.
-        // It looks for sequences of 9 to 25 characters that consist of digits, whitespace, and typical phone number punctuation.
         Pattern pattern = Pattern.compile("\\+?[\\d\\s-().]{9,25}");
         Matcher matcher = pattern.matcher(text);
         while (matcher.find()) {
             String candidate = matcher.group(0);
-
-            // Count the digits in the candidate string.
             long digitCount = candidate.chars().filter(Character::isDigit).count();
-
-            // As per the user's request, if it contains 9 or more digits, we consider it a phone number.
             if (digitCount >= 9) {
-                // Clean up the candidate string by removing trailing punctuation.
                 String cleanedCandidate = candidate.trim().replaceAll("[.,;:]*$", "");
                 return cleanedCandidate;
             }
