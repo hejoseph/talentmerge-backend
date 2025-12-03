@@ -106,7 +106,12 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
         List<Education> educations = parseEducation(sections.getOrDefault("education", ""));
         educations.forEach(candidate::addEducation);
 
-        candidate.setSkills(parseSkills(sections.getOrDefault("skills", "")));
+        String skillsSection = sections.getOrDefault("skills", "");
+        String skills = parseSkills(skillsSection);
+        if (skills.isEmpty()) {
+            skills = parseSkills(text); // Fallback to searching the whole text
+        }
+        candidate.setSkills(skills);
 
         return candidate;
     }

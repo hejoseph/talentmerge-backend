@@ -74,6 +74,7 @@ public class ResumeController {
                     savedCandidate.getEmail(),
                     savedCandidate.getPhone(),
                     savedCandidate.getSkills(),
+                    rawText, // Include the raw text for debugging
                     savedCandidate.getOriginalFilePath(),
                     workExperienceDTOs,
                     educationDTOs

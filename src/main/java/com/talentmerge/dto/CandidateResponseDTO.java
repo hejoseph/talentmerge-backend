@@ -15,6 +15,7 @@ public class CandidateResponseDTO {
     private String email;
     private String phone;
     private String skills;
+    private String rawText;
     private String originalFilePath;
     private List<WorkExperienceDTO> workExperiences;
     private List<EducationDTO> educations;
