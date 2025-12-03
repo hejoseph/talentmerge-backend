@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.text.Normalizer;
 
 @Service
 public class PdfBoxAndPoiParsingService implements ParsingService {
@@ -133,8 +134,11 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
     private Map<String, String> splitTextIntoSections(String text) {
+        // Stage 1: Text Preprocessing
+        String preprocessedText = preprocessText(text);
+        
         Map<String, String> sections = new HashMap<>();
-        String[] lines = text.split("\\r?\\n");
+        String[] lines = preprocessedText.split("\\r?\\n");
         String currentSection = "summary"; // Default section for text at the beginning
         StringBuilder content = new StringBuilder();
 
@@ -499,5 +503,74 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
             }
         }
         return "N/A";
+    }
+    
+    /**
+     * Stage 1: Preprocess text to normalize formatting and fix common issues
+     */
+    private String preprocessText(String text) {
+        if (text == null || text.isEmpty()) {
+            return text;
+        }
+        
+        // 1. Unicode normalization - decompose accented characters then recompose
+        String normalized = Normalizer.normalize(text, Normalizer.Form.NFC);
+        
+        // 2. Fix common OCR errors
+        normalized = fixCommonOcrErrors(normalized);
+        
+        // 3. Standardize line breaks
+        normalized = normalized.replaceAll("\\r\\n", "\n")
+                              .replaceAll("\\r", "\n");
+        
+        // 4. Clean up excessive whitespace while preserving structure
+        normalized = cleanWhitespace(normalized);
+        
+        return normalized;
+    }
+    
+    /**
+     * Fix common OCR errors that affect section detection
+     */
+    private String fixCommonOcrErrors(String text) {
+        return text
+            // Fix common character misrecognition
+            .replaceAll("\\bl\\b", "I")  // lowercase l mistaken for I
+            .replaceAll("\\brn\\b", "m") // rn mistaken for m
+            .replaceAll("\\bO\\b", "0")  // O mistaken for 0 in dates
+            // Fix common French accent issues
+            .replaceAll("e'", "é")
+            .replaceAll("a'", "à")
+            .replaceAll("E'", "É")
+            .replaceAll("A'", "À")
+            // Fix spacing around punctuation
+            .replaceAll("\\s+:", ":")
+            .replaceAll("\\s+;", ";");
+    }
+    
+    /**
+     * Clean whitespace while preserving document structure
+     */
+    private String cleanWhitespace(String text) {
+        String[] lines = text.split("\\n");
+        StringBuilder cleaned = new StringBuilder();
+        
+        for (String line : lines) {
+            // Remove trailing whitespace
+            String trimmed = line.replaceAll("\\s+$", "");
+            
+            // Normalize internal whitespace (multiple spaces/tabs to single space)
+            trimmed = trimmed.replaceAll("\\s+", " ");
+            
+            // Preserve leading whitespace structure for indentation
+            if (!trimmed.trim().isEmpty()) {
+                cleaned.append(trimmed).append("\n");
+            } else if (cleaned.length() > 0 && cleaned.charAt(cleaned.length() - 1) != '\n') {
+                // Preserve single empty lines for structure
+                cleaned.append("\n");
+            }
+        }
+        
+        return cleaned.toString();
     }
 }
