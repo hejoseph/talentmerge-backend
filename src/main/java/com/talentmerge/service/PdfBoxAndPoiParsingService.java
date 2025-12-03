@@ -29,15 +29,17 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
 
     private static final List<String> SECTION_KEYWORDS = Arrays.asList(
             // English
-            "experience", "employment history", "work experience",
-            "education", "academic background",
-            "skills", "technical skills", "competencies",
-            "summary", "profile", "objective",
+            "experience", "employment history", "work experience", "professional experience",
+            "work history", "career history", "employment",
+            "education", "academic background", "academic history",
+            "skills", "technical skills", "competencies", "core competencies",
+            "summary", "profile", "objective", "about",
             // French
-            "expérience professionnelle", "expériences",
-            "formation", "éducation",
-            "compétences",
-            "profil", "à propos"
+            "expérience professionnelle", "expériences professionnelles", "expériences", 
+            "expérience", "historique professionnel", "parcours professionnel",
+            "formation", "formations", "éducation", "parcours académique",
+            "compétences", "compétences techniques", "savoir-faire",
+            "profil", "à propos", "résumé", "objectif"
     );
 
     private static final List<String> SKILL_DICTIONARY = Arrays.asList(
@@ -137,13 +139,22 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
         StringBuilder content = new StringBuilder();
 
         for (String line : lines) {
-            String lowercasedLine = line.trim().toLowerCase();
+            String trimmedLine = line.trim();
+            String lowercasedLine = trimmedLine.toLowerCase();
             String matchedKeyword = null;
 
+            // Check if line contains section keywords (more flexible matching)
             for (String keyword : SECTION_KEYWORDS) {
-                if (lowercasedLine.startsWith(keyword)) {
-                    matchedKeyword = keyword;
-                    break;
+                if (lowercasedLine.contains(keyword)) {
+                    // Additional check to ensure it's likely a section header
+                    // (short line, uppercase, or contains common header patterns)
+                    if (trimmedLine.length() < 50 && 
+                        (lowercasedLine.equals(keyword) || 
+                         trimmedLine.toUpperCase().contains(keyword.toUpperCase()) ||
+                         lowercasedLine.startsWith(keyword))) {
+                        matchedKeyword = keyword;
+                        break;
+                    }
                 }
             }
 
@@ -164,37 +175,166 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
     private String normalizeSectionKey(String keyword) {
-        if (keyword.contains("experience") || keyword.contains("expériences") || keyword.contains("employment")) return "experience";
-        if (keyword.contains("education") || keyword.contains("formation") || keyword.contains("academic")) return "education";
-        if (keyword.contains("skill") || keyword.contains("compétences") || keyword.contains("competencies")) return "skills";
-        if (keyword.contains("summary") || keyword.contains("profil") || keyword.contains("à propos") || keyword.contains("objective")) return "summary";
+        String lowerKeyword = keyword.toLowerCase();
+        if (lowerKeyword.contains("experience") || lowerKeyword.contains("expérience") || 
+            lowerKeyword.contains("employment") || lowerKeyword.contains("career") ||
+            lowerKeyword.contains("work") || lowerKeyword.contains("professional") ||
+            lowerKeyword.contains("parcours professionnel") || lowerKeyword.contains("historique professionnel")) 
+            return "experience";
+        if (lowerKeyword.contains("education") || lowerKeyword.contains("formation") || 
+            lowerKeyword.contains("academic") || lowerKeyword.contains("éducation") ||
+            lowerKeyword.contains("parcours académique")) 
+            return "education";
+        if (lowerKeyword.contains("skill") || lowerKeyword.contains("compétences") || 
+            lowerKeyword.contains("competencies") || lowerKeyword.contains("savoir-faire")) 
+            return "skills";
+        if (lowerKeyword.contains("summary") || lowerKeyword.contains("profil") || 
+            lowerKeyword.contains("à propos") || lowerKeyword.contains("objective") ||
+            lowerKeyword.contains("résumé") || lowerKeyword.contains("about")) 
+            return "summary";
         return "summary"; // Default
     }
 
     private List<WorkExperience> parseWorkExperience(String text) {
         List<WorkExperience> experiences = new ArrayList<>();
-        // This regex is adapted for both English and French formats.
-        Pattern jobPattern = Pattern.compile(
-                "(?<jobTitle>.+?)\\n"
-                        + "(?<company>.+?)\\n"
-                        + "(?<startDate>\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z.]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})\\s*[-– ]\\s*(?<endDate>Present|Aujourd'hui|\\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)[a-z.]*\\s+\\d{4}|\\d{2}/\\d{4}|\\d{4})"
-                        + "(?:\\n(?<description>(?:(?!^.+?\\n.+?\\n(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc)).|\\n)*))?",
-                Pattern.CASE_INSENSITIVE
-        );
-
-        Matcher matcher = jobPattern.matcher(text);
-        while (matcher.find()) {
-            WorkExperience exp = new WorkExperience();
-            exp.setJobTitle(matcher.group("jobTitle").trim());
-            exp.setCompany(matcher.group("company").trim());
-            exp.setStartDate(parseDate(matcher.group("startDate")));
-            exp.setEndDate(parseDate(matcher.group("endDate")));
-            String description = matcher.group("description") != null ? matcher.group("description").trim() : "";
-            exp.setDescription(description);
-            experiences.add(exp);
+        
+        if (text == null || text.trim().isEmpty()) {
+            return experiences;
         }
+        
+        // Split text into lines and process
+        String[] lines = text.split("\\r?\\n");
+        
+        // Use a simpler approach - look for sequences of job title, company, dates
+        for (int i = 0; i < lines.length - 2; i++) {
+            String line1 = lines[i].trim();
+            String line2 = i + 1 < lines.length ? lines[i + 1].trim() : "";
+            String line3 = i + 2 < lines.length ? lines[i + 2].trim() : "";
+            String line4 = i + 3 < lines.length ? lines[i + 3].trim() : "";
+            
+            // Skip empty lines and obvious section headers
+            if (line1.isEmpty() || isObviousSectionHeader(line1)) {
+                continue;
+            }
+            
+            // Look for date patterns in the next few lines
+            String dateLineContent = null;
+            int dateLineIndex = -1;
+            
+            // Check lines 2, 3, 4 for date patterns
+            for (int j = i + 1; j <= i + 3 && j < lines.length; j++) {
+                String checkLine = lines[j].trim();
+                if (containsDateRange(checkLine)) {
+                    dateLineContent = checkLine;
+                    dateLineIndex = j;
+                    break;
+                }
+            }
+            
+            // If we found a date pattern, this might be a work experience entry
+            if (dateLineContent != null && dateLineIndex >= i + 1) {
+                WorkExperience exp = new WorkExperience();
+                
+                // Set job title and company based on position relative to date line
+                if (dateLineIndex == i + 2) {
+                    // Pattern: Job Title, Company, Date
+                    exp.setJobTitle(line1);
+                    exp.setCompany(line2);
+                } else if (dateLineIndex == i + 3) {
+                    // Pattern: Job Title, Company, something, Date  OR  Company, Job Title, something, Date
+                    if (seemsLikeJobTitle(line1)) {
+                        exp.setJobTitle(line1);
+                        exp.setCompany(line2);
+                    } else {
+                        exp.setJobTitle(line2);
+                        exp.setCompany(line1);
+                    }
+                } else {
+                    // Pattern: Job Title, Date  (company might be missing)
+                    exp.setJobTitle(line1);
+                    exp.setCompany("N/A");
+                }
+                
+                // Parse the date range
+                String[] dates = splitDateRange(dateLineContent);
+                if (dates.length >= 1) {
+                    exp.setStartDate(parseDate(dates[0]));
+                }
+                if (dates.length >= 2) {
+                    exp.setEndDate(parseDate(dates[1]));
+                }
+                
+                // Look for description after the date line
+                StringBuilder description = new StringBuilder();
+                for (int j = dateLineIndex + 1; j < Math.min(dateLineIndex + 5, lines.length); j++) {
+                    String descLine = lines[j].trim();
+                    if (descLine.isEmpty()) continue;
+                    if (isObviousSectionHeader(descLine)) break;
+                    if (containsDateRange(descLine)) break; // Next job entry
+                    
+                    if (descLine.startsWith("•") || descLine.startsWith("-") || descLine.startsWith("*") || 
+                        descLine.startsWith("◦") || descLine.toLowerCase().matches(".*\\b(developed|built|managed|led|created|implemented|designed|responsable|développé|géré|créé|conçu)\\b.*")) {
+                        if (description.length() > 0) description.append(" ");
+                        description.append(descLine);
+                    }
+                }
+                exp.setDescription(description.toString());
+                
+                // Only add if we have at least a job title
+                if (exp.getJobTitle() != null && !exp.getJobTitle().trim().isEmpty() && !exp.getJobTitle().equals("N/A")) {
+                    experiences.add(exp);
+                }
+                
+                // Skip processed lines
+                i = dateLineIndex;
+            }
+        }
+        
         return experiences;
     }
+    
+    private boolean isObviousSectionHeader(String line) {
+        if (line.length() > 50) return false;
+        String lower = line.toLowerCase();
+        return line.toUpperCase().equals(line) && line.length() > 2 ||
+               SECTION_KEYWORDS.stream().anyMatch(keyword -> lower.equals(keyword.toLowerCase()));
+    }
+    
+    private boolean containsDateRange(String line) {
+        if (line.length() > 100) return false;
+        
+        // Look for various date patterns
+        return line.matches("(?i).*\\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|may|june|july|august|september|october|november|december|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc|janvier|février|avril|juillet|août|septembre|octobre|novembre|décembre)\\b.*\\b(19|20)\\d{2}\\b.*") ||
+               line.matches("(?i).*(19|20)\\d{2}\\s*[-–—to àau]\\s*(19|20)\\d{2}.*") ||
+               line.matches("(?i).*\\d{1,2}/\\d{4}\\s*[-–—to àau]\\s*\\d{1,2}/\\d{4}.*") ||
+               line.matches("(?i).*(present|current|aujourd'hui|actuel).*") ||
+               line.matches("(?i).*\\b(19|20)\\d{2}\\b.*[-–—].*\\b(present|current|aujourd'hui|actuel|19|20\\d{2})\\b.*");
+    }
+    
+    private boolean seemsLikeJobTitle(String line) {
+        if (line.isEmpty() || line.length() > 80) return false;
+        String lower = line.toLowerCase();
+        return lower.contains("engineer") || lower.contains("developer") || lower.contains("manager") ||
+               lower.contains("director") || lower.contains("analyst") || lower.contains("specialist") ||
+               lower.contains("consultant") || lower.contains("coordinator") || lower.contains("lead") ||
+               lower.contains("senior") || lower.contains("junior") || lower.contains("principal") ||
+               lower.contains("ingénieur") || lower.contains("développeur") || lower.contains("gestionnaire") ||
+               lower.contains("directeur") || lower.contains("analyste") || lower.contains("chef") ||
+               lower.contains("responsable") || lower.contains("consultant") || 
+               Character.isUpperCase(line.charAt(0));
+    }
+    
+    private String[] splitDateRange(String dateRange) {
+        // Split on various separators
+        String[] parts = dateRange.split("(?i)\\s*(?:[-–—]|to|à|au)\\s*");
+        if (parts.length >= 2) {
+            return new String[]{parts[0].trim(), parts[1].trim()};
+        } else if (parts.length == 1) {
+            return new String[]{parts[0].trim()};
+        }
+        return new String[]{};
+    }
+    
 
     private List<Education> parseEducation(String text) {
         List<Education> educations = new ArrayList<>();
@@ -234,45 +374,98 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
     private LocalDate parseDate(String dateString) {
-        if (dateString == null || dateString.equalsIgnoreCase("Present") || dateString.equalsIgnoreCase("Aujourd'hui")) {
+        if (dateString == null || dateString.isEmpty() || 
+            dateString.equalsIgnoreCase("Present") || dateString.equalsIgnoreCase("Aujourd'hui") ||
+            dateString.equalsIgnoreCase("Current") || dateString.equalsIgnoreCase("Actuel")) {
             return null;
         }
-        dateString = dateString.replace(".", ""); // remove dots from janv. -> janv
-
-        // Try parsing MM/YYYY directly first
-        try {
-            if (dateString.matches("\\d{2}/\\d{4}")) {
-                return LocalDate.parse("01/" + dateString.trim(), DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-            }
-        } catch (DateTimeParseException e) {
-            // Fallback to other patterns if this specific parse fails
-        }
-
-        for (Pattern pattern : DATE_PATTERNS) {
-            Matcher matcher = pattern.matcher(dateString.trim());
-            if (matcher.matches()) {
-                try {
-                    String matchedStr = matcher.group(0);
-                    if (matchedStr.matches("(?i).*[a-zA-Z].*")) { // Contains letters, so it's a Month YYYY format
-                        // Try English first
-                        try {
-                            return LocalDate.parse("01 " + matchedStr, new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("dd MMM yyyy").toFormatter(Locale.ENGLISH)).withDayOfMonth(1);
-                        } catch (DateTimeParseException e) {
-                            // Then try French
-                            try {
-                                return LocalDate.parse("01 " + matchedStr, new DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern("dd MMM yyyy").toFormatter(Locale.FRENCH)).withDayOfMonth(1);
-                            } catch (DateTimeParseException e2) {
-                                // Log failure if needed
-                            }
-                        }
-                    } else if (matchedStr.matches("\\d{4}")) {
-                        return LocalDate.parse(matchedStr + "-01-01");
-                    }
-                } catch (DateTimeParseException e) {
-                    // Continue to next pattern
-                }
+        
+        // Clean the input string
+        String cleanedDate = dateString.trim()
+            .replace(".", "")  // remove dots from janv. -> janv
+            .replaceAll("\\s+", " "); // normalize spaces
+        
+        // Try MM/YYYY format first
+        Pattern mmYyyyPattern = Pattern.compile("\\d{1,2}/\\d{4}");
+        Matcher mmYyyyMatcher = mmYyyyPattern.matcher(cleanedDate);
+        if (mmYyyyMatcher.find()) {
+            try {
+                String matched = mmYyyyMatcher.group();
+                String[] parts = matched.split("/");
+                int month = Integer.parseInt(parts[0]);
+                int year = Integer.parseInt(parts[1]);
+                return LocalDate.of(year, month, 1);
+            } catch (Exception e) {
+                // Continue to other patterns
             }
         }
+        
+        // Try year only format
+        Pattern yearPattern = Pattern.compile("\\b(19|20)\\d{2}\\b");
+        Matcher yearMatcher = yearPattern.matcher(cleanedDate);
+        if (yearMatcher.find()) {
+            try {
+                int year = Integer.parseInt(yearMatcher.group());
+                return LocalDate.of(year, 1, 1);
+            } catch (Exception e) {
+                // Continue to other patterns
+            }
+        }
+        
+        // Try month year formats (both English and French)
+        Map<String, Integer> monthMap = new HashMap<>();
+        // English months
+        monthMap.put("jan", 1); monthMap.put("january", 1);
+        monthMap.put("feb", 2); monthMap.put("february", 2);
+        monthMap.put("mar", 3); monthMap.put("march", 3);
+        monthMap.put("apr", 4); monthMap.put("april", 4);
+        monthMap.put("may", 5);
+        monthMap.put("jun", 6); monthMap.put("june", 6);
+        monthMap.put("jul", 7); monthMap.put("july", 7);
+        monthMap.put("aug", 8); monthMap.put("august", 8);
+        monthMap.put("sep", 9); monthMap.put("september", 9);
+        monthMap.put("oct", 10); monthMap.put("october", 10);
+        monthMap.put("nov", 11); monthMap.put("november", 11);
+        monthMap.put("dec", 12); monthMap.put("december", 12);
+        
+        // French months
+        monthMap.put("janv", 1); monthMap.put("janvier", 1);
+        monthMap.put("févr", 2); monthMap.put("février", 2);
+        monthMap.put("mars", 3);
+        monthMap.put("avr", 4); monthMap.put("avril", 4);
+        monthMap.put("mai", 5);
+        monthMap.put("juin", 6);
+        monthMap.put("juil", 7); monthMap.put("juillet", 7);
+        monthMap.put("août", 8);
+        monthMap.put("sept", 9); monthMap.put("septembre", 9);
+        monthMap.put("oct", 10); monthMap.put("octobre", 10);
+        monthMap.put("nov", 11); monthMap.put("novembre", 11);
+        monthMap.put("déc", 12); monthMap.put("décembre", 12);
+        
+        // Try to find month and year in the string
+        Pattern monthYearPattern = Pattern.compile("(?i)\\b(\\d{4})\\b|\\b(" + String.join("|", monthMap.keySet()) + ")\\b");
+        Matcher monthYearMatcher = monthYearPattern.matcher(cleanedDate.toLowerCase());
+        
+        Integer month = null;
+        Integer year = null;
+        
+        while (monthYearMatcher.find()) {
+            String matched = monthYearMatcher.group().toLowerCase();
+            if (matched.matches("\\d{4}")) {
+                year = Integer.parseInt(matched);
+            } else if (monthMap.containsKey(matched)) {
+                month = monthMap.get(matched);
+            }
+        }
+        
+        if (year != null) {
+            if (month != null) {
+                return LocalDate.of(year, month, 1);
+            } else {
+                return LocalDate.of(year, 1, 1);
+            }
+        }
+        
         return null; // Could not parse date
     }
 
