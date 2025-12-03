@@ -32,6 +32,16 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
             "summary", "profile", "objective"
     );
 
+    private static final List<String> SKILL_DICTIONARY = Arrays.asList(
+            "Java", "Python", "JavaScript", "C++", "C#", "Ruby", "Go", "TypeScript", "PHP", "Swift",
+            "React", "Angular", "Vue.js", "Node.js", "Spring Boot", "Django", "Flask", "Ruby on Rails",
+            "SQL", "PostgreSQL", "MySQL", "MongoDB", "Redis", "Oracle",
+            "AWS", "Azure", "Google Cloud", "Docker", "Kubernetes",
+            "HTML", "CSS", "Sass", "Less",
+            "Agile", "Scrum", "JIRA", "Git", "Jenkins"
+            // Add more skills as needed
+    );
+
     // Date patterns for parsing dates in resumes
     private static final List<Pattern> DATE_PATTERNS = Arrays.asList(
             Pattern.compile("\\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\\s+\\d{4}\\b", Pattern.CASE_INSENSITIVE), // Month YYYY
@@ -207,9 +217,15 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
     private String parseSkills(String text) {
-        // Logic to be implemented in Step 8
-        // For now, just return the whole block, cleaned up
-        return text.replaceAll("\\s*\\r?\\n\\s*", ", ").trim();
+        List<String> foundSkills = new ArrayList<>();
+        for (String skill : SKILL_DICTIONARY) {
+            Pattern pattern = Pattern.compile("\\b" + Pattern.quote(skill) + "\\b", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                foundSkills.add(skill);
+            }
+        }
+        return String.join(", ", foundSkills);
     }
 
     private LocalDate parseDate(String dateString) {
