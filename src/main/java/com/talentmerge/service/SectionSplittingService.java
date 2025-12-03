@@ -262,14 +262,327 @@ public class SectionSplittingService {
     }
 
     /**
-     * Stage 3: Validate headers (placeholder - will be enhanced in next step)
+     * Stage 3: Validate headers with context analysis
      */
     private List<HeaderCandidate> validateHeaders(List<HeaderCandidate> candidates, String[] lines) {
-        // For now, just return all candidates above confidence threshold
-        return candidates.stream()
-                .filter(candidate -> candidate.confidence > 0.6)
+        List<HeaderCandidate> validated = new ArrayList<>();
+        
+        for (HeaderCandidate candidate : candidates) {
+            ValidationResult result = validateHeaderContext(candidate, lines);
+            if (result.isValid) {
+                // Update confidence based on context validation
+                candidate.confidence = Math.min(candidate.confidence * result.confidenceMultiplier, 1.0);
+                validated.add(candidate);
+            }
+        }
+        
+        // Remove overlapping headers (keep highest confidence)
+        validated = removeOverlappingHeaders(validated);
+        
+        // Sort by line position
+        return validated.stream()
                 .sorted((a, b) -> Integer.compare(a.startLineIndex, b.startLineIndex))
                 .toList();
+    }
+    
+    /**
+     * Validate header context to filter false positives
+     */
+    private ValidationResult validateHeaderContext(HeaderCandidate candidate, String[] lines) {
+        ValidationResult result = new ValidationResult();
+        result.isValid = true;
+        result.confidenceMultiplier = 1.0;
+        result.reasons = new ArrayList<>();
+        
+        // Check 1: Avoid false positives with company names
+        if (isCompanyNameFalsePositive(candidate, lines)) {
+            result.isValid = false;
+            result.reasons.add("Likely company name containing section keyword");
+            return result;
+        }
+        
+        // Check 2: Validate content after header
+        double contentScore = validateSectionContent(candidate, lines);
+        if (contentScore < 0.3) {
+            result.isValid = false;
+            result.reasons.add("Content after header doesn't match expected section type");
+            return result;
+        }
+        result.confidenceMultiplier *= (0.7 + 0.3 * contentScore);
+        
+        // Check 3: Check surrounding context
+        double contextScore = analyzeContextLines(candidate, lines);
+        result.confidenceMultiplier *= (0.8 + 0.2 * contextScore);
+        
+        // Check 4: Position validation (headers shouldn't be at very end)
+        if (candidate.endLineIndex >= lines.length - 2) {
+            result.confidenceMultiplier *= 0.7;
+            result.reasons.add("Header near end of document");
+        }
+        
+        // Check 5: Length validation for multi-line headers
+        if (candidate.type == HeaderType.MULTI_LINE) {
+            if (candidate.text.length() > 60) {
+                result.confidenceMultiplier *= 0.6;
+                result.reasons.add("Multi-line header too long");
+            }
+        }
+        
+        // Final confidence check
+        if (candidate.confidence * result.confidenceMultiplier < 0.5) {
+            result.isValid = false;
+            result.reasons.add("Final confidence score too low");
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Check if detected header is actually a company name with section keywords
+     */
+    private boolean isCompanyNameFalsePositive(HeaderCandidate candidate, String[] lines) {
+        String headerText = candidate.text.toLowerCase();
+        
+        // Look for company indicators
+        if (headerText.contains("inc.") || headerText.contains("corp.") || 
+            headerText.contains("ltd.") || headerText.contains("llc") ||
+            headerText.contains("sarl") || headerText.contains("sas") ||
+            headerText.contains("gmbh") || headerText.contains("ag")) {
+            return true;
+        }
+        
+        // Check surrounding lines for context clues
+        int startCheck = Math.max(0, candidate.startLineIndex - 2);
+        int endCheck = Math.min(lines.length, candidate.endLineIndex + 3);
+        
+        for (int i = startCheck; i < endCheck; i++) {
+            if (i == candidate.startLineIndex) continue;
+            String line = lines[i].toLowerCase();
+            
+            // Look for date ranges (suggests this is work experience entry, not header)
+            if (line.matches(".*\\d{4}\\s*[-–]\\s*\\d{4}.*") || 
+                line.matches(".*\\d{4}\\s*[-–]\\s*(present|current|aujourd'hui|actuel).*")) {
+                return true;
+            }
+            
+            // Look for job title indicators
+            if (line.contains("engineer") || line.contains("developer") || 
+                line.contains("manager") || line.contains("director") ||
+                line.contains("ingénieur") || line.contains("développeur") ||
+                line.contains("responsable") || line.contains("directeur")) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Validate that content after header matches expected section type
+     */
+    private double validateSectionContent(HeaderCandidate candidate, String[] lines) {
+        int contentStart = candidate.endLineIndex + 1;
+        int contentEnd = Math.min(lines.length, contentStart + 10); // Check first 10 lines
+        
+        if (contentStart >= lines.length) return 0.0;
+        
+        String sectionType = normalizeSectionKey(candidate.matchedKeyword);
+        double score = 0.0;
+        int validLines = 0;
+        
+        for (int i = contentStart; i < contentEnd; i++) {
+            String line = lines[i].trim().toLowerCase();
+            if (line.isEmpty()) continue;
+            
+            validLines++;
+            
+            switch (sectionType) {
+                case "experience":
+                    score += validateExperienceContent(line);
+                    break;
+                case "education":
+                    score += validateEducationContent(line);
+                    break;
+                case "skills":
+                    score += validateSkillsContent(line);
+                    break;
+                default:
+                    score += 0.5; // Neutral for unknown sections
+            }
+        }
+        
+        return validLines > 0 ? score / validLines : 0.0;
+    }
+    
+    /**
+     * Validate experience section content
+     */
+    private double validateExperienceContent(String line) {
+        double score = 0.3; // Base score
+        
+        // Look for job titles
+        if (line.contains("engineer") || line.contains("developer") || line.contains("manager") ||
+            line.contains("analyst") || line.contains("consultant") || line.contains("director") ||
+            line.contains("ingénieur") || line.contains("développeur") || line.contains("responsable") ||
+            line.contains("chef") || line.contains("directeur") || line.contains("consultant")) {
+            score += 0.3;
+        }
+        
+        // Look for company names or dates
+        if (line.matches(".*\\d{4}.*") || line.contains("inc") || line.contains("corp") ||
+            line.contains("ltd") || line.contains("sarl") || line.contains("sas")) {
+            score += 0.2;
+        }
+        
+        // Look for experience indicators
+        if (line.contains("developed") || line.contains("managed") || line.contains("led") ||
+            line.contains("implemented") || line.contains("designed") ||
+            line.contains("développé") || line.contains("géré") || line.contains("dirigé") ||
+            line.contains("implémenté") || line.contains("conçu")) {
+            score += 0.3;
+        }
+        
+        return Math.min(score, 1.0);
+    }
+    
+    /**
+     * Validate education section content
+     */
+    private double validateEducationContent(String line) {
+        double score = 0.3; // Base score
+        
+        // Look for degrees
+        if (line.contains("bachelor") || line.contains("master") || line.contains("phd") ||
+            line.contains("diploma") || line.contains("degree") ||
+            line.contains("licence") || line.contains("master") || line.contains("doctorat") ||
+            line.contains("diplôme") || line.contains("bts") || line.contains("dut")) {
+            score += 0.4;
+        }
+        
+        // Look for universities/schools
+        if (line.contains("university") || line.contains("college") || line.contains("school") ||
+            line.contains("institute") || line.contains("université") || line.contains("école") ||
+            line.contains("institut") || line.contains("lycée")) {
+            score += 0.3;
+        }
+        
+        // Look for graduation years
+        if (line.matches(".*\\d{4}.*") || line.contains("graduated") || line.contains("diplômé")) {
+            score += 0.2;
+        }
+        
+        return Math.min(score, 1.0);
+    }
+    
+    /**
+     * Validate skills section content
+     */
+    private double validateSkillsContent(String line) {
+        double score = 0.3; // Base score
+        
+        // Look for technical skills
+        if (line.contains("java") || line.contains("python") || line.contains("javascript") ||
+            line.contains("sql") || line.contains("aws") || line.contains("docker") ||
+            line.contains("react") || line.contains("angular") || line.contains("spring")) {
+            score += 0.4;
+        }
+        
+        // Look for skill categories
+        if (line.contains("programming") || line.contains("languages") || line.contains("frameworks") ||
+            line.contains("databases") || line.contains("tools") ||
+            line.contains("programmation") || line.contains("langages") || line.contains("outils")) {
+            score += 0.3;
+        }
+        
+        // Look for skill-like formatting (comma-separated)
+        if (line.contains(",") && line.split(",").length > 2) {
+            score += 0.3;
+        }
+        
+        return Math.min(score, 1.0);
+    }
+    
+    /**
+     * Analyze context lines around the header for additional validation
+     */
+    private double analyzeContextLines(HeaderCandidate candidate, String[] lines) {
+        double score = 0.5; // Base score
+        
+        // Check if previous lines suggest this is a real section break
+        int prevStart = Math.max(0, candidate.startLineIndex - 3);
+        boolean hasContentBefore = false;
+        
+        for (int i = prevStart; i < candidate.startLineIndex; i++) {
+            String line = lines[i].trim();
+            if (!line.isEmpty() && line.length() > 10) {
+                hasContentBefore = true;
+                break;
+            }
+        }
+        
+        if (hasContentBefore) score += 0.2;
+        
+        // Check if there's meaningful content after
+        int nextEnd = Math.min(lines.length, candidate.endLineIndex + 5);
+        boolean hasContentAfter = false;
+        
+        for (int i = candidate.endLineIndex + 1; i < nextEnd; i++) {
+            String line = lines[i].trim();
+            if (!line.isEmpty() && line.length() > 5) {
+                hasContentAfter = true;
+                break;
+            }
+        }
+        
+        if (hasContentAfter) score += 0.3;
+        
+        return Math.min(score, 1.0);
+    }
+    
+    /**
+     * Remove overlapping headers, keeping the one with highest confidence
+     */
+    private List<HeaderCandidate> removeOverlappingHeaders(List<HeaderCandidate> candidates) {
+        List<HeaderCandidate> result = new ArrayList<>();
+        
+        for (HeaderCandidate candidate : candidates) {
+            boolean overlaps = false;
+            
+            for (int i = 0; i < result.size(); i++) {
+                HeaderCandidate existing = result.get(i);
+                
+                // Check if ranges overlap
+                if (candidate.startLineIndex <= existing.endLineIndex && 
+                    candidate.endLineIndex >= existing.startLineIndex) {
+                    overlaps = true;
+                    
+                    // Keep the one with higher confidence
+                    if (candidate.confidence > existing.confidence) {
+                        result.set(i, candidate);
+                    }
+                    break;
+                }
+            }
+            
+            if (!overlaps) {
+                result.add(candidate);
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Validation result class
+     */
+    private static class ValidationResult {
+        boolean isValid;
+        double confidenceMultiplier;
+        List<String> reasons;
+        
+        ValidationResult() {
+            this.reasons = new ArrayList<>();
+        }
     }
 
     /**
