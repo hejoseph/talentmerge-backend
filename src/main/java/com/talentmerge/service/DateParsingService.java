@@ -33,7 +33,7 @@ public class DateParsingService {
         new DatePattern(
             Pattern.compile("(\\d{4})[-.]?(\\d{2})\\s*[-–—]\\s*(\\d{4})[-.]?(\\d{2})", Pattern.CASE_INSENSITIVE),
             "YYYY_MM_TO_YYYY_MM", // "2020-01 - 2022-12"
-            Arrays.asList(2, 1, 4, 3) // Note: reversed order for YYYY-MM format
+            Arrays.asList(1, 2, 3, 4) // Fixed: correct order for YYYY-MM format
         ),
         new DatePattern(
             Pattern.compile("(\\w{3,9})\\s+(\\d{4})\\s*[-–—]\\s*(present|current|now)", Pattern.CASE_INSENSITIVE),
@@ -42,6 +42,11 @@ public class DateParsingService {
         ),
         
         // French patterns
+        new DatePattern(
+            Pattern.compile("(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|janv|févr|avr|juil|sept|oct|nov|déc)\\s+(\\d{4})\\s*[-–—]\\s*(janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|janv|févr|avr|juil|sept|oct|nov|déc)\\s+(\\d{4})", Pattern.CASE_INSENSITIVE),
+            "FRENCH_MONTH_YEAR_TO_MONTH_YEAR", // "janvier 2020 - décembre 2022"
+            Arrays.asList(1, 2, 3, 4)
+        ),
         new DatePattern(
             Pattern.compile("(\\w{3,9})\\s+(\\d{4})\\s*[-–—]\\s*(aujourd'hui|actuel|maintenant)", Pattern.CASE_INSENSITIVE),
             "FRENCH_MONTH_YEAR_TO_PRESENT", // "janvier 2020 - Aujourd'hui"
@@ -73,7 +78,7 @@ public class DateParsingService {
         // Quarter patterns
         new DatePattern(
             Pattern.compile("Q(\\d)\\s+(\\d{4})\\s*[-–—]\\s*Q(\\d)\\s+(\\d{4})", Pattern.CASE_INSENSITIVE),
-            "QUARTER_TO_QUARTER", // "Q1 2020 - Q4 2022"
+            "QUARTER_TO_QUARTER", // "Q1 2020 - Q4 2022"  
             Arrays.asList(1, 2, 3, 4)
         )
     );
@@ -124,6 +129,7 @@ public class DateParsingService {
         for (DatePattern pattern : DATE_PATTERNS) {
             Matcher matcher = pattern.pattern.matcher(cleanedText);
             if (matcher.find()) {
+                
                 try {
                     DateRangeResult result = parseWithPattern(matcher, pattern, cleanedText);
                     if (result != null && result.isValid) {
@@ -143,14 +149,17 @@ public class DateParsingService {
      * Preprocess date text to handle common variations
      */
     private String preprocessDateText(String dateText) {
-        return dateText.toLowerCase()
+        String cleaned = dateText.toLowerCase()
                       .replaceAll("[,.]", "") // Remove commas and periods
                       .replaceAll("\\s+", " ") // Normalize whitespace
-                      .replaceAll("–", "-") // Normalize dashes
+                      .replaceAll("–", "-") // Normalize dashes  
                       .replaceAll("—", "-")
-                      .replaceAll("\\bto\\b", "-") // Convert "to" to dash
-                      .replaceAll("\\btill?\\b", "-") // Convert "till"/"til" to dash
+                      .replaceAll("\\bto\\b", " - ") // Convert "to" to dash with spaces
+                      .replaceAll("\\btill?\\b", " - ") // Convert "till"/"til" to dash
                       .trim();
+        
+        
+        return cleaned;
     }
 
     /**
@@ -164,6 +173,20 @@ public class DateParsingService {
         String startYear = extractGroup(matcher, groups.get(1));
         String endMonth = extractGroup(matcher, groups.get(2));
         String endYear = extractGroup(matcher, groups.get(3));
+        
+        // Handle special cases for YYYY-MM format
+        if (pattern.type.equals("YYYY_MM_TO_YYYY_MM")) {
+            // For YYYY-MM format, we need to swap positions
+            String tempStartYear = startMonth;  // Group 1 is year
+            String tempStartMonth = startYear;  // Group 2 is month
+            String tempEndYear = endMonth;      // Group 3 is year  
+            String tempEndMonth = endYear;      // Group 4 is month
+            
+            startMonth = tempStartMonth;
+            startYear = tempStartYear;
+            endMonth = tempEndMonth;
+            endYear = tempEndYear;
+        }
         
         // Handle special cases
         boolean isOngoing = isOngoingPosition(originalText);
@@ -231,11 +254,16 @@ public class DateParsingService {
             } else if (patternType.contains("QUARTER")) {
                 // Quarter to month conversion
                 int quarter = Integer.parseInt(monthStr.trim());
-                month = (quarter - 1) * 3 + 1; // Q1->Jan, Q2->Apr, Q3->Jul, Q4->Oct
+                // Q1->Jan(1), Q2->Apr(4), Q3->Jul(7), Q4->Oct(10)
+                month = (quarter - 1) * 3 + 1;
             } else {
                 // Month name
                 month = parseMonthName(monthStr);
             }
+        } else if (patternType.contains("YYYY_MM")) {
+            // For YYYY-MM format, monthStr is actually the month part
+            // This should not happen with current patterns, but good to handle
+            month = 1;
         }
         
         // Validate date

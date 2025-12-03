@@ -4,15 +4,44 @@ import com.talentmerge.model.Candidate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Arrays;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
 class PdfBoxAndPoiParsingServiceTest {
 
+    @Mock
+    private SectionSplittingService sectionSplittingService;
+    
+    @Mock
+    private WorkExperienceParsingService workExperienceParsingService;
+
+    @InjectMocks
     private PdfBoxAndPoiParsingService parsingService;
 
     @BeforeEach
     void setUp() {
-        parsingService = new PdfBoxAndPoiParsingService();
+        // Set up default mock behavior for section splitting
+        Map<String, String> defaultSections = new HashMap<>();
+        defaultSections.put("summary", "Default summary content");
+        defaultSections.put("experience", "Default experience content");
+        defaultSections.put("education", "Default education content");
+        defaultSections.put("skills", "Default skills content");
+        
+        when(sectionSplittingService.splitTextIntoSections(anyString())).thenReturn(defaultSections);
+        
+        // Set up default mock behavior for work experience parsing (empty list for most tests)
+        when(workExperienceParsingService.parseWorkExperience(anyString())).thenReturn(Arrays.asList());
     }
 
     @Test
