@@ -30,6 +30,9 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
 
     @Autowired
     private SectionSplittingService sectionSplittingService;
+    
+    @Autowired
+    private WorkExperienceParsingService workExperienceParsingService;
 
     private static final List<String> SECTION_KEYWORDS = Arrays.asList(
             // English
@@ -120,7 +123,7 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
 
         Map<String, String> sections = sectionSplittingService.splitTextIntoSections(text);
 
-        List<WorkExperience> experiences = parseWorkExperience(sections.getOrDefault("experience", ""));
+        List<WorkExperience> experiences = workExperienceParsingService.parseWorkExperience(sections.getOrDefault("experience", ""));
         experiences.forEach(candidate::addWorkExperience);
 
         List<Education> educations = parseEducation(sections.getOrDefault("education", ""));
@@ -137,145 +140,6 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
     }
 
 
-    private List<WorkExperience> parseWorkExperience(String text) {
-        List<WorkExperience> experiences = new ArrayList<>();
-        
-        if (text == null || text.trim().isEmpty()) {
-            return experiences;
-        }
-        
-        // Split text into lines and process
-        String[] lines = text.split("\\r?\\n");
-        
-        // Use a simpler approach - look for sequences of job title, company, dates
-        for (int i = 0; i < lines.length - 2; i++) {
-            String line1 = lines[i].trim();
-            String line2 = i + 1 < lines.length ? lines[i + 1].trim() : "";
-            String line3 = i + 2 < lines.length ? lines[i + 2].trim() : "";
-            String line4 = i + 3 < lines.length ? lines[i + 3].trim() : "";
-            
-            // Skip empty lines and obvious section headers
-            if (line1.isEmpty() || isObviousSectionHeader(line1)) {
-                continue;
-            }
-            
-            // Look for date patterns in the next few lines
-            String dateLineContent = null;
-            int dateLineIndex = -1;
-            
-            // Check lines 2, 3, 4 for date patterns
-            for (int j = i + 1; j <= i + 3 && j < lines.length; j++) {
-                String checkLine = lines[j].trim();
-                if (containsDateRange(checkLine)) {
-                    dateLineContent = checkLine;
-                    dateLineIndex = j;
-                    break;
-                }
-            }
-            
-            // If we found a date pattern, this might be a work experience entry
-            if (dateLineContent != null && dateLineIndex >= i + 1) {
-                WorkExperience exp = new WorkExperience();
-                
-                // Set job title and company based on position relative to date line
-                if (dateLineIndex == i + 2) {
-                    // Pattern: Job Title, Company, Date
-                    exp.setJobTitle(line1);
-                    exp.setCompany(line2);
-                } else if (dateLineIndex == i + 3) {
-                    // Pattern: Job Title, Company, something, Date  OR  Company, Job Title, something, Date
-                    if (seemsLikeJobTitle(line1)) {
-                        exp.setJobTitle(line1);
-                        exp.setCompany(line2);
-                    } else {
-                        exp.setJobTitle(line2);
-                        exp.setCompany(line1);
-                    }
-                } else {
-                    // Pattern: Job Title, Date  (company might be missing)
-                    exp.setJobTitle(line1);
-                    exp.setCompany("N/A");
-                }
-                
-                // Parse the date range
-                String[] dates = splitDateRange(dateLineContent);
-                if (dates.length >= 1) {
-                    exp.setStartDate(parseDate(dates[0]));
-                }
-                if (dates.length >= 2) {
-                    exp.setEndDate(parseDate(dates[1]));
-                }
-                
-                // Look for description after the date line
-                StringBuilder description = new StringBuilder();
-                for (int j = dateLineIndex + 1; j < Math.min(dateLineIndex + 5, lines.length); j++) {
-                    String descLine = lines[j].trim();
-                    if (descLine.isEmpty()) continue;
-                    if (isObviousSectionHeader(descLine)) break;
-                    if (containsDateRange(descLine)) break; // Next job entry
-                    
-                    if (descLine.startsWith("•") || descLine.startsWith("-") || descLine.startsWith("*") || 
-                        descLine.startsWith("◦") || descLine.toLowerCase().matches(".*\\b(developed|built|managed|led|created|implemented|designed|responsable|développé|géré|créé|conçu)\\b.*")) {
-                        if (description.length() > 0) description.append(" ");
-                        description.append(descLine);
-                    }
-                }
-                exp.setDescription(description.toString());
-                
-                // Only add if we have at least a job title
-                if (exp.getJobTitle() != null && !exp.getJobTitle().trim().isEmpty() && !exp.getJobTitle().equals("N/A")) {
-                    experiences.add(exp);
-                }
-                
-                // Skip processed lines
-                i = dateLineIndex;
-            }
-        }
-        
-        return experiences;
-    }
-    
-    private boolean isObviousSectionHeader(String line) {
-        if (line.length() > 50) return false;
-        String lower = line.toLowerCase();
-        return line.toUpperCase().equals(line) && line.length() > 2 ||
-               SECTION_KEYWORDS.stream().anyMatch(keyword -> lower.equals(keyword.toLowerCase()));
-    }
-    
-    private boolean containsDateRange(String line) {
-        if (line.length() > 100) return false;
-        
-        // Look for various date patterns
-        return line.matches("(?i).*\\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|january|february|march|april|may|june|july|august|september|october|november|december|janv|févr|mars|avr|mai|juin|juil|août|sept|oct|nov|déc|janvier|février|avril|juillet|août|septembre|octobre|novembre|décembre)\\b.*\\b(19|20)\\d{2}\\b.*") ||
-               line.matches("(?i).*(19|20)\\d{2}\\s*[-–—to àau]\\s*(19|20)\\d{2}.*") ||
-               line.matches("(?i).*\\d{1,2}/\\d{4}\\s*[-–—to àau]\\s*\\d{1,2}/\\d{4}.*") ||
-               line.matches("(?i).*(present|current|aujourd'hui|actuel).*") ||
-               line.matches("(?i).*\\b(19|20)\\d{2}\\b.*[-–—].*\\b(present|current|aujourd'hui|actuel|19|20\\d{2})\\b.*");
-    }
-    
-    private boolean seemsLikeJobTitle(String line) {
-        if (line.isEmpty() || line.length() > 80) return false;
-        String lower = line.toLowerCase();
-        return lower.contains("engineer") || lower.contains("developer") || lower.contains("manager") ||
-               lower.contains("director") || lower.contains("analyst") || lower.contains("specialist") ||
-               lower.contains("consultant") || lower.contains("coordinator") || lower.contains("lead") ||
-               lower.contains("senior") || lower.contains("junior") || lower.contains("principal") ||
-               lower.contains("ingénieur") || lower.contains("développeur") || lower.contains("gestionnaire") ||
-               lower.contains("directeur") || lower.contains("analyste") || lower.contains("chef") ||
-               lower.contains("responsable") || lower.contains("consultant") || 
-               Character.isUpperCase(line.charAt(0));
-    }
-    
-    private String[] splitDateRange(String dateRange) {
-        // Split on various separators
-        String[] parts = dateRange.split("(?i)\\s*(?:[-–—]|to|à|au)\\s*");
-        if (parts.length >= 2) {
-            return new String[]{parts[0].trim(), parts[1].trim()};
-        } else if (parts.length == 1) {
-            return new String[]{parts[0].trim()};
-        }
-        return new String[]{};
-    }
     
 
     private List<Education> parseEducation(String text) {
