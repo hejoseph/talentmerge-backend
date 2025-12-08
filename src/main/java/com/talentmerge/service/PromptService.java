@@ -12,7 +12,7 @@ public class PromptService {
             Return ONLY a valid JSON object with the following structure (no markdown, no explanation):
             
             {
-                "name": "Full name of the candidate",
+                "name": "Full name of the candidate (if found)",
                 "email": "Email address (if found)",
                 "phone": "Phone number (if found)",
                 "skills": "Comma-separated list of technical skills and competencies",

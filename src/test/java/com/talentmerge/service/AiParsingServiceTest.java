@@ -77,55 +77,6 @@ class AiParsingServiceTest {
     }
 
     @Test
-    void testParseAnonymizedCandidateFromText_Success() {
-        // Given
-        String anonymizedText = "PERSON_1\nSoftware Engineer\nEMAIL_1\nPHONE_1\nJava, Python";
-        
-        String mockPrompt = "Parse this anonymized resume: " + anonymizedText;
-        when(promptService.createAnonymizedResumeParsingPrompt(anonymizedText)).thenReturn(mockPrompt);
-        
-        String mockAiResponse = """
-            {
-                "name": "PERSON_1",
-                "email": "EMAIL_1",
-                "phone": "PHONE_1",
-                "skills": "Java, Python",
-                "workExperiences": [
-                    {
-                        "jobTitle": "Software Engineer",
-                        "company": "COMPANY_1",
-                        "startDate": "2020-01-01",
-                        "endDate": null,
-                        "description": "Developed applications"
-                    }
-                ],
-                "educations": [
-                    {
-                        "institution": "UNIVERSITY_1",
-                        "degree": "Bachelor of Computer Science",
-                        "graduationDate": "2019-12-01"
-                    }
-                ]
-            }
-            """;
-        
-        when(chatModel.call(mockPrompt)).thenReturn(mockAiResponse);
-
-        // When
-        Candidate result = aiParsingService.parseAnonymizedCandidateFromText(anonymizedText);
-
-        // Then
-        assertNotNull(result);
-        assertEquals("PERSON_1", result.getName());
-        assertEquals("EMAIL_1", result.getEmail());
-        assertEquals("PHONE_1", result.getPhone());
-        assertEquals("Java, Python", result.getSkills());
-        assertEquals(1, result.getWorkExperiences().size());
-        assertEquals("COMPANY_1", result.getWorkExperiences().get(0).getCompany());
-        assertEquals("UNIVERSITY_1", result.getEducations().get(0).getInstitution());
-    }
-
-    @Test
     void testParseCandidateFromText_WithMarkdownResponse() {
         // Given
         String resumeText = "Simple resume text";

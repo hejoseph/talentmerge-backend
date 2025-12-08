@@ -54,27 +54,6 @@ public class AiParsingService implements IParsingService {
         }
     }
     
-    public Candidate parseAnonymizedCandidateFromText(String anonymizedText) {
-        try {
-            logger.info("Starting AI parsing for anonymized resume text of length: {}", anonymizedText.length());
-            
-            // Create prompt for anonymized resume parsing
-            String prompt = promptService.createAnonymizedResumeParsingPrompt(anonymizedText);
-            
-            // Call OpenRouter via Spring AI
-            logger.debug("Sending anonymized resume request to OpenRouter...");
-            String aiResponse = chatModel.call(prompt);
-            logger.debug("Received response from OpenRouter for anonymized resume: {}", 
-                        aiResponse.substring(0, Math.min(200, aiResponse.length())));
-            
-            // Parse the JSON response
-            return parseAiResponseToCandidate(aiResponse);
-            
-        } catch (Exception e) {
-            logger.error("Error during anonymized AI parsing: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to parse anonymized resume with AI: " + e.getMessage(), e);
-        }
-    }
 
     private Candidate parseAiResponseToCandidate(String aiResponse) {
         try {
