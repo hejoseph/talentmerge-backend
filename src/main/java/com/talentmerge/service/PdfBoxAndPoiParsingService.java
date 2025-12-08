@@ -30,10 +30,12 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
 
     private final SectionSplittingService sectionSplittingService;
     private final WorkExperienceParsingService workExperienceParsingService;
+    private final PersonalInfoDetectionService personalInfoDetectionService;
 
-    public PdfBoxAndPoiParsingService(SectionSplittingService sectionSplittingService, WorkExperienceParsingService workExperienceParsingService) {
+    public PdfBoxAndPoiParsingService(SectionSplittingService sectionSplittingService, WorkExperienceParsingService workExperienceParsingService, PersonalInfoDetectionService personalInfoDetectionService) {
         this.sectionSplittingService = sectionSplittingService;
         this.workExperienceParsingService = workExperienceParsingService;
+        this.personalInfoDetectionService = personalInfoDetectionService;
     }
 
     private static final List<String> SECTION_KEYWORDS = Arrays.asList(
@@ -118,10 +120,7 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
 
     @Override
     public Candidate parseCandidateFromText(String text) {
-        Candidate candidate = new Candidate();
-        candidate.setName(extractName(text));
-        candidate.setEmail(extractEmail(text));
-        candidate.setPhone(extractPhone(text));
+        Candidate candidate = personalInfoDetectionService.detectPersonalInfo(text);
 
         Map<String, String> sections = sectionSplittingService.splitTextIntoSections(text);
 
@@ -277,35 +276,4 @@ public class PdfBoxAndPoiParsingService implements ParsingService {
         return null; // Could not parse date
     }
 
-    private String extractName(String text) {
-        Pattern pattern = Pattern.compile("^([A-ZÀ-ÿ][a-zà-ÿ]+(?:\\s[A-ZÀ-ÿ][a-zà-ÿ']+)+)", Pattern.MULTILINE);
-        Matcher matcher = pattern.matcher(text);
-        if (matcher.find()) {
-            return matcher.group(1).trim();
-        }
-        return "N/A";
-    }
-
-    private String extractEmail(String text) {
-        Pattern pattern = Pattern.compile("([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9_-]+)");
-        Matcher matcher = pattern.matcher(text);
-        if (matcher.find()) {
-            return matcher.group(1).trim();
-        }
-        return "N/A";
-    }
-
-    private String extractPhone(String text) {
-        Pattern pattern = Pattern.compile("\\+?[\\d\\s-().]{9,25}");
-        Matcher matcher = pattern.matcher(text);
-        while (matcher.find()) {
-            String candidate = matcher.group(0);
-            long digitCount = candidate.chars().filter(Character::isDigit).count();
-            if (digitCount >= 9) {
-                String cleanedCandidate = candidate.trim().replaceAll("[.,;:]*$", "");
-                return cleanedCandidate;
-            }
-        }
-        return "N/A";
-    }
 }
