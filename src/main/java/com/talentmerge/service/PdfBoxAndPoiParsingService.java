@@ -28,11 +28,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 @Service
 public class PdfBoxAndPoiParsingService implements ParsingService {
 
-    @Autowired
-    private SectionSplittingService sectionSplittingService;
-    
-    @Autowired
-    private WorkExperienceParsingService workExperienceParsingService;
+    private final SectionSplittingService sectionSplittingService;
+    private final WorkExperienceParsingService workExperienceParsingService;
+
+    public PdfBoxAndPoiParsingService(SectionSplittingService sectionSplittingService, WorkExperienceParsingService workExperienceParsingService) {
+        this.sectionSplittingService = sectionSplittingService;
+        this.workExperienceParsingService = workExperienceParsingService;
+    }
 
     private static final List<String> SECTION_KEYWORDS = Arrays.asList(
             // English
