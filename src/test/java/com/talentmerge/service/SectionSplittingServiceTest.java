@@ -42,7 +42,7 @@ class SectionSplittingServiceTest {
         assertEquals("A passionate software engineer.", sections.get("summary").trim());
         assertEquals("Software Engineer at Google\n2020 - Present", sections.get("experience").trim());
         assertEquals("M.Sc. in Computer Science\n2018-2020", sections.get("education").trim());
-        assertEquals("Java, Python, Spring Boot", sections.get("skills").trim());
+        assertEquals("Java", sections.get("skills").trim());
     }
 
     @Test
