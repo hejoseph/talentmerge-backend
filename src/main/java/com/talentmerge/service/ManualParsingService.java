@@ -3,6 +3,7 @@ package com.talentmerge.service;
 import com.talentmerge.model.Candidate;
 import com.talentmerge.model.Education;
 import com.talentmerge.model.WorkExperience;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -21,6 +22,7 @@ import java.util.regex.Pattern;
  * from resume text. This is an alternative to AI/LLM-based parsing.
  */
 @Service
+@Qualifier("manual")
 public class ManualParsingService implements IParsingService{
 
     private final SectionSplittingService sectionSplittingService;

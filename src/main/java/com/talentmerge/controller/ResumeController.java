@@ -7,8 +7,9 @@ import com.talentmerge.model.Candidate;
 import com.talentmerge.repository.CandidateRepository;
 import com.talentmerge.service.FileStorageService;
 import com.talentmerge.service.IToolParsingService;
-import com.talentmerge.service.ManualParsingService;
+import com.talentmerge.service.IParsingService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,18 +25,18 @@ public class ResumeController {
 
     private final FileStorageService fileStorageService;
     private final IToolParsingService IToolParsingService;
-    private final ManualParsingService manualParsingService;
+    private final IParsingService parsingService;
     private final CandidateRepository candidateRepository;
 
     @Autowired
     public ResumeController(
             FileStorageService fileStorageService,
             IToolParsingService IToolParsingService,
-            ManualParsingService manualParsingService,
+            @Qualifier("manual") IParsingService parsingService,
             CandidateRepository candidateRepository) {
         this.fileStorageService = fileStorageService;
         this.IToolParsingService = IToolParsingService;
-        this.manualParsingService = manualParsingService;
+        this.parsingService = parsingService;
         this.candidateRepository = candidateRepository;
     }
 
@@ -56,8 +57,8 @@ public class ResumeController {
                 return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(rawText);
             }
 
-            // 3. Extract structured data into a Candidate object using manual parsing
-            Candidate candidate = manualParsingService.parseCandidateFromText(rawText);
+            // 3. Extract structured data into a Candidate object
+            Candidate candidate = parsingService.parseCandidateFromText(rawText);
             candidate.setOriginalFilePath(filePathString);
 
             // 4. Save the candidate to the database
