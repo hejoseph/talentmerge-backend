@@ -6,7 +6,8 @@ import com.talentmerge.dto.WorkExperienceDTO;
 import com.talentmerge.model.Candidate;
 import com.talentmerge.repository.CandidateRepository;
 import com.talentmerge.service.FileStorageService;
-import com.talentmerge.service.ParsingService;
+import com.talentmerge.service.IToolParsingService;
+import com.talentmerge.service.ManualParsingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,16 +23,19 @@ import java.util.stream.Collectors;
 public class ResumeController {
 
     private final FileStorageService fileStorageService;
-    private final ParsingService parsingService;
+    private final IToolParsingService IToolParsingService;
+    private final ManualParsingService manualParsingService;
     private final CandidateRepository candidateRepository;
 
     @Autowired
     public ResumeController(
             FileStorageService fileStorageService,
-            ParsingService parsingService,
+            IToolParsingService IToolParsingService,
+            ManualParsingService manualParsingService,
             CandidateRepository candidateRepository) {
         this.fileStorageService = fileStorageService;
-        this.parsingService = parsingService;
+        this.IToolParsingService = IToolParsingService;
+        this.manualParsingService = manualParsingService;
         this.candidateRepository = candidateRepository;
     }
 
@@ -47,13 +51,13 @@ public class ResumeController {
             String filePathString = fileStorageService.getFile(storedFileName).toString();
 
             // 2. Parse the resume content
-            String rawText = parsingService.parseResume(file.getInputStream(), file.getContentType());
+            String rawText = IToolParsingService.parseResume(file.getInputStream(), file.getContentType());
             if (rawText.startsWith("Unsupported file type") || rawText.startsWith("Error parsing resume")) {
                 return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(rawText);
             }
 
-            // 3. Extract structured data into a Candidate object
-            Candidate candidate = parsingService.parseCandidateFromText(rawText);
+            // 3. Extract structured data into a Candidate object using manual parsing
+            Candidate candidate = manualParsingService.parseCandidateFromText(rawText);
             candidate.setOriginalFilePath(filePathString);
 
             // 4. Save the candidate to the database
