@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/resumes")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"}) // React dev server
 public class ResumeController {
 
     private final FileStorageService fileStorageService;
