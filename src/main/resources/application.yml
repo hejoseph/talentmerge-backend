@@ -35,3 +35,15 @@ logging:
 app:
   file:
     upload-dir: uploads
+
+# Spring AI Configuration for OpenRouter
+spring:
+  ai:
+    openai:
+      api-key: ${OPENROUTER_API_KEY:your-api-key-here}
+      base-url: https://openrouter.ai/api
+      chat:
+        options:
+          model: ${OPENROUTER_MODEL:amazon/nova-2-lite-v1:free}
+          temperature: 0.1
+          max-tokens: 4000
