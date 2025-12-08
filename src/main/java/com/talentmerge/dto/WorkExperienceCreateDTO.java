@@ -1,5 +1,6 @@
 package com.talentmerge.dto;
 
+import com.talentmerge.validation.ValidDateRange;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
@@ -13,6 +14,7 @@ import java.time.LocalDate;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@ValidDateRange(message = "End date must be after start date")
 public class WorkExperienceCreateDTO {
     
     @NotBlank(message = "Job title is required")
@@ -32,12 +34,4 @@ public class WorkExperienceCreateDTO {
     
     @Size(max = 2000, message = "Description cannot exceed 2000 characters")
     private String description;
-    
-    // Custom validation method to ensure end date is after start date
-    public boolean isEndDateValid() {
-        if (endDate == null) {
-            return true; // Current position
-        }
-        return !endDate.isBefore(startDate);
-    }
 }
