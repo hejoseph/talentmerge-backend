@@ -2,6 +2,7 @@ package com.talentmerge.service;
 
 import com.talentmerge.dto.CandidateCreateRequestDTO;
 import com.talentmerge.dto.CandidateResponseDTO;
+import com.talentmerge.dto.CandidateListItemDTO;
 import com.talentmerge.dto.EducationCreateDTO;
 import com.talentmerge.dto.EducationDTO;
 import com.talentmerge.dto.WorkExperienceCreateDTO;
@@ -11,6 +12,8 @@ import com.talentmerge.model.Candidate;
 import com.talentmerge.model.Education;
 import com.talentmerge.model.WorkExperience;
 import com.talentmerge.repository.CandidateRepository;
+import com.talentmerge.repository.WorkExperienceRepository;
+import com.talentmerge.repository.EducationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -33,6 +36,8 @@ import java.util.stream.Collectors;
 public class CandidateService {
 
     private final CandidateRepository candidateRepository;
+    private final WorkExperienceRepository workExperienceRepository;
+    private final EducationRepository educationRepository;
 
     /**
      * Create a new candidate manually
@@ -98,11 +103,44 @@ public class CandidateService {
      * Get all candidates with pagination
      */
     @Transactional(readOnly = true)
-    public Page<CandidateResponseDTO> getAllCandidates(Pageable pageable) {
+    public Page<?> getAllCandidates(Pageable pageable, boolean includeDetails) {
         log.info("Retrieving all candidates with pagination: {}", pageable);
         
-        Page<Candidate> candidates = candidateRepository.findAll(pageable);
-        return candidates.map(this::convertToResponseDTO);
+        Page<Candidate> pageResult = candidateRepository.findAll(pageable);
+
+        if (!includeDetails) {
+            List<Long> ids = pageResult.getContent().stream().map(Candidate::getId).toList();
+
+            // Batch count associated rows in two queries
+            var weCounts = workExperienceRepository.countByCandidateIds(ids);
+            var edCounts = educationRepository.countByCandidateIds(ids);
+
+            Map<Long, Long> weMap = new HashMap<>();
+            for (Object[] row : weCounts) {
+                weMap.put((Long) row[0], (Long) row[1]);
+            }
+            Map<Long, Long> edMap = new HashMap<>();
+            for (Object[] row : edCounts) {
+                edMap.put((Long) row[0], (Long) row[1]);
+            }
+
+            return pageResult.map(c -> new CandidateListItemDTO(
+                c.getId(), c.getName(), c.getEmail(), c.getPhone(), c.getSkills(),
+                weMap.getOrDefault(c.getId(), 0L), edMap.getOrDefault(c.getId(), 0L)
+            ));
+        } else {
+            // Preload associations to avoid N+1 and map full detail DTOs
+            List<Long> ids = pageResult.getContent().stream().map(Candidate::getId).toList();
+            if (!ids.isEmpty()) {
+                candidateRepository.findWithWorkExperiencesByIdIn(ids);
+                candidateRepository.findWithEducationsByIdIn(ids);
+                pageResult.getContent().forEach(c -> {
+                    c.getWorkExperiences().size();
+                    c.getEducations().size();
+                });
+            }
+            return pageResult.map(this::convertToResponseDTO);
+        }
     }
 
     /**

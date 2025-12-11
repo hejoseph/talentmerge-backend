@@ -45,7 +45,7 @@ public class CandidateController {
      * Get all candidates with pagination and sorting
      */
     @GetMapping
-    public ResponseEntity<Page<CandidateResponseDTO>> getAllCandidates(
+    public ResponseEntity<Page<?>> getAllCandidates(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id") String sortBy,
@@ -69,8 +69,9 @@ public class CandidateController {
         // Create pageable
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, validSortBy));
         
-        // Get candidates
-        Page<CandidateResponseDTO> candidates = candidateService.getAllCandidates(pageable);
+        // Get candidates (optimized summary for list view)
+        boolean includeDetails = false;
+        Page<?> candidates = candidateService.getAllCandidates(pageable, includeDetails);
         
         log.info("Retrieved {} candidates out of {} total", 
                 candidates.getNumberOfElements(), candidates.getTotalElements());
@@ -204,7 +205,7 @@ public class CandidateController {
         log.info("Retrieving candidate statistics");
         
         // Get total count by requesting first page
-        Page<CandidateResponseDTO> firstPage = candidateService.getAllCandidates(PageRequest.of(0, 1));
+        Page<?> firstPage = candidateService.getAllCandidates(PageRequest.of(0, 1), false);
         long totalCandidates = firstPage.getTotalElements();
         
         CandidateStatsResponse stats = new CandidateStatsResponse(totalCandidates);

@@ -2,6 +2,10 @@ server:
   port: 8080
   servlet:
     context-path: /api
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024
 
 spring:
   mvc:
@@ -34,6 +38,10 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+    properties:
+      hibernate:
+        default_batch_fetch_size: 50
+        generate_statistics: true
 
 jwt:
   secret: myVeryLongAndSecureSecretKeyForJWTTokenGeneration1234567890123456789012345678901234567890
