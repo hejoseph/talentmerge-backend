@@ -10,6 +10,10 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -104,16 +108,55 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoHandlerFound(NoHandlerFoundException ex, HttpServletRequest request) {
+        logger.warn("No handler found for {} {}", ex.getHttpMethod(), ex.getRequestURL());
+        ErrorResponse errorResponse = new ErrorResponse(
+            "NOT_FOUND",
+            "Endpoint not found",
+            Collections.emptyMap()
+        );
+        errorResponse.setStatus(HttpStatus.NOT_FOUND.value());
+        errorResponse.setPath(request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        logger.warn("Method not allowed: {} on {}", ex.getMethod(), request.getRequestURI());
+        ErrorResponse errorResponse = new ErrorResponse(
+            "METHOD_NOT_ALLOWED",
+            ex.getMessage(),
+            Collections.emptyMap()
+        );
+        errorResponse.setStatus(HttpStatus.METHOD_NOT_ALLOWED.value());
+        errorResponse.setPath(request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(errorResponse);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+        logger.warn("Unsupported media type on {}: {}", request.getRequestURI(), ex.getContentType());
+        ErrorResponse errorResponse = new ErrorResponse(
+            "UNSUPPORTED_MEDIA_TYPE",
+            ex.getMessage(),
+            Collections.emptyMap()
+        );
+        errorResponse.setStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value());
+        errorResponse.setPath(request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(errorResponse);
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleAllExceptions(Exception ex) {
+    public ResponseEntity<ErrorResponse> handleAllExceptions(Exception ex, HttpServletRequest request) {
         logger.error("An unexpected error occurred: {}", ex.getMessage(), ex);
-        
         ErrorResponse errorResponse = new ErrorResponse(
             "INTERNAL_SERVER_ERROR",
             "An unexpected internal server error occurred.",
             Collections.emptyMap()
         );
-        
+        errorResponse.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        errorResponse.setPath(request.getRequestURI());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
     }
 }
