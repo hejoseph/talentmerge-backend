@@ -3,6 +3,8 @@ package com.talentmerge.controller;
 import com.talentmerge.dto.CandidateResponseDTO;
 import com.talentmerge.dto.EducationDTO;
 import com.talentmerge.dto.WorkExperienceDTO;
+import com.talentmerge.dto.ResumeExtractResponse;
+import com.talentmerge.dto.ResumeParseRequest;
 import com.talentmerge.model.Candidate;
 import com.talentmerge.repository.CandidateRepository;
 import com.talentmerge.service.FileStorageService;
@@ -57,20 +59,35 @@ public class ResumeController {
             String storedFileName = fileStorageService.storeFile(file);
             String filePathString = fileStorageService.getFile(storedFileName).toString();
 
-            // 2. Parse the resume content
+            // 2. Parse the resume content to raw text only
             String rawText = IToolParsingService.parseResume(file.getInputStream(), file.getContentType());
             if (rawText.startsWith("Unsupported file type") || rawText.startsWith("Error parsing resume")) {
                 return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(rawText);
             }
 
-            // 3. Extract structured data into a Candidate object
-            Candidate candidate = parsingService.parseCandidateFromText(rawText);
-            candidate.setOriginalFilePath(filePathString);
+            // 3. Return raw text and original file path so the user can review/edit
+            return ResponseEntity.ok(new ResumeExtractResponse(rawText, filePathString));
 
-            // 4. Save the candidate to the database
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Could not process the file: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/parse")
+    public ResponseEntity<?> parseEditedText(@RequestBody ResumeParseRequest request) {
+        String rawText = request.getRawText();
+        if (rawText == null || rawText.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("rawText is required");
+        }
+        try {
+            Candidate candidate = parsingService.parseCandidateFromText(rawText);
+            if (request.getOriginalFilePath() != null) {
+                candidate.setOriginalFilePath(request.getOriginalFilePath());
+            }
             Candidate savedCandidate = candidateRepository.save(candidate);
 
-            // 5. Return the structured data as a DTO
             List<WorkExperienceDTO> workExperienceDTOs = savedCandidate.getWorkExperiences().stream()
                     .map(exp -> new WorkExperienceDTO(exp.getId(), exp.getJobTitle(), exp.getCompany(), exp.getStartDate(), exp.getEndDate(), exp.getDescription()))
                     .collect(Collectors.toList());
@@ -85,18 +102,16 @@ public class ResumeController {
                     savedCandidate.getEmail(),
                     savedCandidate.getPhone(),
                     savedCandidate.getSkills(),
-                    rawText, // Include the raw text for debugging
+                    rawText,
                     savedCandidate.getOriginalFilePath(),
                     workExperienceDTOs,
                     educationDTOs
             );
 
             return ResponseEntity.ok(responseDTO);
-
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Could not process the file: " + e.getMessage());
+                    .body("Failed to parse edited text: " + e.getMessage());
         }
     }
 
