@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/candidates")
+@RequestMapping("/candidates")
 @RequiredArgsConstructor
 @Slf4j
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"}) // React dev server

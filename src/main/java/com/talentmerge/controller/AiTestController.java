@@ -7,7 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/ai")
+@RequestMapping("/ai")
 public class AiTestController {
 
     private final ChatModel chatModel;
