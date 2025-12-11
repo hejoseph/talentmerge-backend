@@ -18,6 +18,9 @@ spring:
       allowed-methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
       allowed-headers: ["*"]
       allow-credentials: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
   ai:
     openai:
       api-key: ${OPENROUTER_API_KEY:your-api-key-here}

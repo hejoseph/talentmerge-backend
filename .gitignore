@@ -36,3 +36,4 @@ build/
 uploads/
 
 application-prod.yml
+application-local.yml
