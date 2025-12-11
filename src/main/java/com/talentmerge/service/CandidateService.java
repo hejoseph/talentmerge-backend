@@ -100,6 +100,17 @@ public class CandidateService {
     }
 
     /**
+     * Backward-compatible overload used by existing tests and callers expecting full details.
+     */
+    @Transactional(readOnly = true)
+    public Page<CandidateResponseDTO> getAllCandidates(Pageable pageable) {
+        Page<?> page = getAllCandidates(pageable, true);
+        @SuppressWarnings("unchecked")
+        Page<CandidateResponseDTO> typed = (Page<CandidateResponseDTO>) (Page<?>) page;
+        return typed;
+    }
+
+    /**
      * Get all candidates with pagination
      */
     @Transactional(readOnly = true)
