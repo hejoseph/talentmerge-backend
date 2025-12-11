@@ -9,6 +9,7 @@ import org.hibernate.annotations.BatchSize;
 import java.util.ArrayList;
 import java.util.List;
 
+
 @Entity
 @Table(name = "candidates")
 @Data
@@ -29,6 +30,10 @@ public class Candidate {
     private String skills;
 
     private String originalFilePath;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", nullable = false)
+    private User owner;
 
     @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, orphanRemoval = true)
     @BatchSize(size = 50)

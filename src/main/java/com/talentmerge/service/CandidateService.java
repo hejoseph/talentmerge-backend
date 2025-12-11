@@ -14,7 +14,11 @@ import com.talentmerge.model.WorkExperience;
 import com.talentmerge.repository.CandidateRepository;
 import com.talentmerge.repository.WorkExperienceRepository;
 import com.talentmerge.repository.EducationRepository;
+import com.talentmerge.repository.UserRepository;
+import com.talentmerge.model.User;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -38,6 +42,21 @@ public class CandidateService {
     private final CandidateRepository candidateRepository;
     private final WorkExperienceRepository workExperienceRepository;
     private final EducationRepository educationRepository;
+    private final UserRepository userRepository;
+
+   private Long getCurrentUserId() {
+       Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+       if (auth == null || !(auth.getPrincipal() instanceof com.talentmerge.security.UserDetailsImpl u)) {
+           throw new IllegalStateException("No authenticated user");
+       }
+       return u.getId();
+   }
+
+   private User getCurrentUser() {
+       Long id = getCurrentUserId();
+       return userRepository.findById(id)
+               .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
+   }
 
     /**
      * Create a new candidate manually
@@ -51,6 +70,10 @@ public class CandidateService {
         try {
             // Create candidate entity
             Candidate candidate = new Candidate();
+
+            // Ownership: set current authenticated user as owner
+            User owner = getCurrentUser();
+            candidate.setOwner(owner);
             candidate.setName(request.getName().trim());
             candidate.setEmail(request.getEmail().trim().toLowerCase());
             candidate.setPhone(request.getPhone() != null ? request.getPhone().trim() : null);
@@ -117,7 +140,8 @@ public class CandidateService {
     public Page<?> getAllCandidates(Pageable pageable, boolean includeDetails) {
         log.info("Retrieving all candidates with pagination: {}", pageable);
         
-        Page<Candidate> pageResult = candidateRepository.findAll(pageable);
+        Long ownerId = getCurrentUserId();
+        Page<Candidate> pageResult = candidateRepository.findByOwnerId(ownerId, pageable);
 
         if (!includeDetails) {
             List<Long> ids = pageResult.getContent().stream().map(Candidate::getId).toList();
@@ -161,7 +185,8 @@ public class CandidateService {
     public Optional<CandidateResponseDTO> getCandidateById(Long id) {
         log.info("Retrieving candidate by ID: {}", id);
         
-        return candidateRepository.findById(id)
+        Long ownerId = getCurrentUserId();
+        return candidateRepository.findByIdAndOwnerId(id, ownerId)
                 .map(this::convertToResponseDTO);
     }
 
@@ -174,7 +199,8 @@ public class CandidateService {
         // Business validation
         validateCandidateRequest(request);
         
-        Candidate existingCandidate = candidateRepository.findById(id)
+        Long ownerId = getCurrentUserId();
+        Candidate existingCandidate = candidateRepository.findByIdAndOwnerId(id, ownerId)
                 .orElseThrow(() -> new IllegalArgumentException("Candidate not found with ID: " + id));
         
         try {
@@ -235,7 +261,8 @@ public class CandidateService {
     public void deleteCandidate(Long id) {
         log.info("Deleting candidate with ID: {}", id);
         
-        if (!candidateRepository.existsById(id)) {
+        Long ownerId = getCurrentUserId();
+        if (!candidateRepository.existsByIdAndOwnerId(id, ownerId)) {
             throw new IllegalArgumentException("Candidate not found with ID: " + id);
         }
         
@@ -250,7 +277,8 @@ public class CandidateService {
     public Optional<CandidateResponseDTO> findByEmail(String email) {
         log.info("Searching for candidate by email: {}", email);
         
-        return candidateRepository.findByEmail(email.trim().toLowerCase())
+        Long ownerId = getCurrentUserId();
+        return candidateRepository.findByEmailAndOwnerId(email.trim().toLowerCase(), ownerId)
                 .map(this::convertToResponseDTO);
     }
 

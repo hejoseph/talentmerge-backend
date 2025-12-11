@@ -7,6 +7,8 @@ import com.talentmerge.dto.ResumeExtractResponse;
 import com.talentmerge.dto.ResumeParseRequest;
 import com.talentmerge.model.Candidate;
 import com.talentmerge.repository.CandidateRepository;
+import com.talentmerge.repository.UserRepository;
+import com.talentmerge.model.User;
 import com.talentmerge.service.FileStorageService;
 import com.talentmerge.service.IToolParsingService;
 import com.talentmerge.service.IParsingService;
@@ -18,6 +20,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.io.IOException;
 import java.util.List;
@@ -33,6 +37,7 @@ public class ResumeController {
     private final IParsingService parsingService;
     private final HybridAnonymizationService anonymizationService;
     private final CandidateRepository candidateRepository;
+    private final UserRepository userRepository;
 
     @Autowired
     public ResumeController(
@@ -40,12 +45,14 @@ public class ResumeController {
             IToolParsingService IToolParsingService,
             @Qualifier("ai") IParsingService parsingService,
             HybridAnonymizationService anonymizationService,
-            CandidateRepository candidateRepository) {
+            CandidateRepository candidateRepository,
+            UserRepository userRepository) {
         this.fileStorageService = fileStorageService;
         this.IToolParsingService = IToolParsingService;
         this.parsingService = parsingService;
         this.anonymizationService = anonymizationService;
         this.candidateRepository = candidateRepository;
+        this.userRepository = userRepository;
     }
 
     @PostMapping("/upload")
@@ -86,6 +93,17 @@ public class ResumeController {
             if (request.getOriginalFilePath() != null) {
                 candidate.setOriginalFilePath(request.getOriginalFilePath());
             }
+            // Ownership: assign current user as owner
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !(auth.getPrincipal() instanceof com.talentmerge.security.UserDetailsImpl u)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+            }
+            User owner = userRepository.findById(u.getId()).orElse(null);
+            if (owner == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("User not found");
+            }
+            candidate.setOwner(owner);
+
             Candidate savedCandidate = candidateRepository.save(candidate);
 
             List<WorkExperienceDTO> workExperienceDTOs = savedCandidate.getWorkExperiences().stream()
